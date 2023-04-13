@@ -126,6 +126,15 @@ def get_attendance_data():
  
 def check_attendance():
     st.subheader("Check Attendance")
+       
+    # Retrieve the attendance data from Firebase Realtime Database
+    attendance_data = ref.get()
+    
+    # Convert the attendance data to a Pandas DataFrame
+    attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
+    
+    # Display the attendance data in a table using Streamlit
+    st.dataframe(attendance_df)
 
 if __name__ == '__main__':
     main()
