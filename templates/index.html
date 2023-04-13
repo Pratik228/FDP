@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Person Details</title>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <h2>Person Details</h2>
+      <form
+        action="{{ url_for('capture') }}"
+        method="POST"
+        enctype="multipart/form-data"
+      >
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" required /><br /><br />
+
+        <label for="usn">USN:</label>
+        <input type="text" id="usn" name="usn" required /><br /><br />
+
+        <label for="department">Department:</label>
+        <select id="department" name="department" required>
+          <option value="" selected disabled>Select department</option>
+          <option value="CSE">Computer Science and Engineering</option>
+          <option value="ISE">Information Science and Engineering</option>
+          <option value="ECE">
+            Electronics and Communication Engineering
+          </option></select
+        ><br /><br />
+
+        <label for="year">Year of joining:</label>
+        <input type="text" id="year" name="year" required /><br /><br />
+
+        <label for="semester">Semester:</label>
+        <select id="semester" name="semester" required>
+          <option value="" selected disabled>Select semester</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option></select
+        ><br /><br />
+
+        <label for="photo">Photo:</label>
+        <input
+          type="file"
+          id="photo"
+          name="photo"
+          accept="image/*"
+          required
+        /><br /><br />
+
+        <input type="submit" value="Submit" />
+      </form>
+    </div>
+  </body>
+</html>
