@@ -2,6 +2,7 @@ import streamlit as st
 import cv2
 import os
 import firebase_admin
+import base64
 import pickle
 import datetime
 import subprocess
@@ -122,19 +123,49 @@ def take_attendance():
         st.success('Success! Attendance marked')
 
 def get_attendance_data():
-        pass
+    pass
+
+# def download_csv(df):
+#     csv = df.to_csv(index=False)
+#     b64 = base64.b64encode(csv.encode()).decode()
+#     href = f'<a href="data:file/csv;base64,{b64}" download="attendance.csv">Download CSV file</a>'
+#     return href
  
 def check_attendance():
     st.subheader("Check Attendance")
-       
-    # Retrieve the attendance data from Firebase Realtime Database
-    attendance_data = ref.get()
-    
-    # Convert the attendance data to a Pandas DataFrame
+    # Get the attendance data from the "Students" node in the Firebase database
+    attendance_ref = db.reference('Students')
+    attendance_data = attendance_ref.get()
+
+    # Create a pandas dataframe from the attendance data
     attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
-    
-    # Display the attendance data in a table using Streamlit
+
+    # Get the last attendance date and time from the "last_attendance" column
+    last_attendance = attendance_df["last_attendance"]
+    present_today = 0
+
+    # Check if the last attendance date matches today's date
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    for i, date_time in last_attendance.items():
+        date = date_time.split(" ")[0]
+        if date == today:
+            present_today += 1
+
+    # Display the attendance data in a table
     st.dataframe(attendance_df)
+
+    # Display a message indicating the number of students present today
+    if present_today == 0:
+        st.warning("No students are present today.")
+    else:
+        st.success(f"{present_today} students are present today!")
+    # Create a button to download the CSV file
+    csv = attendance_df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="attendance.csv">Download CSV file</a>'
+    # st.markdown(href, unsafe_allow_html=True)
+    st.download_button(label="Download CSV file", data=csv, file_name=f"attendance_{today}.csv", mime="text/csv")
+
 
 if __name__ == '__main__':
     main()

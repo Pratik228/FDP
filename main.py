@@ -17,6 +17,35 @@ firebase_admin.initialize_app(cred, {
     })
 
 bucket = storage.bucket()
+
+def is_live(frame):
+    # convert the frame to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # apply face detection using OpenCV's built-in detector
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+    # check if any faces were detected
+    if len(faces) == 0:
+        return False
+
+    # iterate over the detected faces
+    for (x, y, w, h) in faces:
+        # extract the face region
+        roi = gray[y:y + h, x:x + w]
+
+        # apply eye detection using OpenCV's built-in detector
+        eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        eyes = eye_cascade.detectMultiScale(roi, scaleFactor=1.1, minNeighbors=5, minSize=(20, 20))
+
+        # check if any eyes were detected
+        if len(eyes) == 0:
+            return False
+
+    # if we get here, the frame is considered live
+    return True
+
 # open default camera (index 0)
 cap = cv2.VideoCapture(0)
 cap.set(3, 640)
@@ -51,7 +80,7 @@ while True:
 
     imgBackground[162:162+480, 55:55+640] = frame
     imgBackground[44:44+633, 808:808+414] = imgModeList[modeType]
-    if faceCurFrame:
+    if faceCurFrame and is_live(frame):
         for encodeFace, faceLoc in zip(encodeCurFrame, faceCurFrame):
             matches = face_recognition.compare_faces(encodeKnown, encodeFace)
             faceDis = face_recognition.face_distance(encodeKnown, encodeFace)
