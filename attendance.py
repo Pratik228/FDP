@@ -8,21 +8,14 @@ import datetime
 import subprocess
 import pandas as pd
 import face_recognition
+import numpy as np
 from firebase_admin import credentials
 from firebase_admin import db
 from firebase_admin import storage
+from firebase_config import initialize_firebase
+from utils import load_known_encodings_and_ids
 
-cred = credentials.Certificate("serviceAccountKey.json")
-try:
-    firebase_admin.get_app()
-except ValueError:
-    firebase_admin.initialize_app(cred, {
-        'databaseURL' : 'https://facialattendance-d2c63-default-rtdb.firebaseio.com/',
-        'storageBucket': 'facialattendance-d2c63.appspot.com'
-    })
-ref = db.reference('Students')
-encodings_ref = db.reference('Encodings')
-bucket = storage.bucket()
+bucket, ref, encodings_ref = initialize_firebase()
 
 def main():
     st.title("Student Attendance System")
@@ -64,43 +57,102 @@ def store_student_details():
         ref.child(student_id).set(data)
 
         st.success('Success! Data submitted for ' + name)
+#  Original one
+# def store_image():
+#     st.subheader("Store Image")
+#     usn = st.text_input("Enter the USN of the student:")
+#     if st.button('Take Photo'):
+#         # Create the "Images" folder if it does not exist
+#         if not os.path.exists("Images"):
+#             os.makedirs("Images")
+#         # Initialize the webcam
+#         cap = cv2.VideoCapture(0)
 
+#         # Take a single photo
+#         while True:
+#             # Capture a frame from the webcam
+#             ret, frame = cap.read()
+
+#             # Display the frame
+#             cv2.imshow("Webcam", frame)
+
+#             # Check if the user pressed 'q' to quit
+#             if cv2.waitKey(1) & 0xFF == ord('q'):
+#                 break
+
+#             # Check if the user clicked the left mouse button
+#             if cv2.waitKey(1) & 0xFF == ord(' '):  # Space bar is ASCII 32
+#                 # Save the photo as "USN.jpg" in the "Images" folder
+#                 file_name = f"Images/{usn}.jpg"
+#                 cv2.imwrite(file_name, frame)
+#                 st.write(f"Saved photo as {file_name}")
+
+#                 # Upload the image to Firebase Storage
+#                 blob = bucket.blob("Images/" + f"{usn}.jpg")
+
+#                 blob.upload_from_filename(file_name)
+
+#                 st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
+
+#                 break
+
+#         # Release the webcam
+#         cap.release()
+
+#         # Destroy all windows
+#         cv2.destroyAllWindows()
+
+# Giving options to the userss
 def store_image():
     st.subheader("Store Image")
-    usn = st.text_input("Enter the USN of the student:")
-    if st.button('Take Photo'):
+    option = st.radio("Enter USN first then Select Option", ("Upload Image", "Take Photo"))
+    if option == "Upload Image":
+        usn = st.text_input("Enter the USN of the student:")
+        uploaded_file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png"])
+        if uploaded_file is not None:
+            file_name = f"Images/{usn}.jpg"
+            with open(file_name, "wb") as f:
+                f.write(uploaded_file.read())
+            st.write(f"Saved photo as {file_name}")
+            # Upload the image to Firebase Storage
+            blob = bucket.blob("Images/" + f"{usn}.jpg")
+            blob.upload_from_filename(file_name)
+            st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
+    elif option == "Take Photo":
+        usn = st.text_input("Enter the USN of the student:")
         # Create the "Images" folder if it does not exist
         if not os.path.exists("Images"):
             os.makedirs("Images")
         # Initialize the webcam
         cap = cv2.VideoCapture(0)
+        st.write("Please look at the camera and come a little closer. The camera will automatically capture your photo once your face is properly detected.")
 
         # Take a single photo
         while True:
             # Capture a frame from the webcam
             ret, frame = cap.read()
 
-            # Display the frame
-            cv2.imshow("Webcam", frame)
+            # Resize image for faster processing
+            small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
 
-            # Check if the user pressed 'q' to quit
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            # Detect faces in the frame
+            face_locations = face_recognition.face_locations(small_frame)
 
-            # Check if the user clicked the left mouse button
-            if cv2.waitKey(1) & 0xFF == ord(' '):  # Space bar is ASCII 32
-                # Save the photo as "USN.jpg" in the "Images" folder
+            # If a face is detected, capture the photo
+            if len(face_locations) == 1:
                 file_name = f"Images/{usn}.jpg"
                 cv2.imwrite(file_name, frame)
                 st.write(f"Saved photo as {file_name}")
 
                 # Upload the image to Firebase Storage
                 blob = bucket.blob("Images/" + f"{usn}.jpg")
-
                 blob.upload_from_filename(file_name)
-
                 st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
 
+                break
+
+            # Check if the user pressed 'q' to quit
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
         # Release the webcam
@@ -108,28 +160,85 @@ def store_image():
 
         # Destroy all windows
         cv2.destroyAllWindows()
+
 def store_encodings():
     st.subheader("Store Encodings")
     if st.button("Click to store encodings"):
         subprocess.run(["python", "encoding.py"])
         st.success('Success! Encodings stored.')  
 
+#  Old one changing it completely
+# def take_attendance():
+#     st.subheader("Take Attendance")
+#     if st.button("Take Attendance"):
+#         subprocess.run(["python", "main.py"])
+#     # Add code to take attendance using saved images
+#         st.success('Success! Attendance marked')
+
+# New one with enhanced options
+import dlib
+def _css_to_rect(css):
+    return dlib.rectangle(css.left(), css.top(), css.right(), css.bottom())
 
 def take_attendance():
     st.subheader("Take Attendance")
-    if st.button("Take Attendance"):
-        subprocess.run(["python", "main.py"])
-    # Add code to take attendance using saved images
-        st.success('Success! Attendance marked')
+    option = st.radio("Select Option", ("Live Video", "Upload Image"))
+    if option == "Live Video":
+        if st.button("Take Attendance"):
+            subprocess.run(["python", "main.py"])
+            st.success('Success! Attendance marked')
+    elif option == "Upload Image":
+        uploaded_file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png"])
+        if uploaded_file is not None:
+            # Read in the uploaded image
+            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
+            # Resize image for faster processing
+            img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
+
+            # Detect faces in the image
+            face_locations = face_recognition.face_locations(img)
+            face_encodings = face_recognition.face_encodings(img, face_locations)
+
+            # Load known encodings and student IDs
+            encodeKnown, studId = load_known_encodings_and_ids()
+
+            # Loop through each face encoding detected in the uploaded image
+            marked_students = 0
+            for face_encoding in face_encodings:
+                # Find the closest matching known encoding
+                distances = face_recognition.face_distance(encodeKnown, face_encoding)
+                min_distance_index = np.argmin(distances)
+                min_distance = distances[min_distance_index]
+
+                # Set a threshold for the minimum distance to consider a match
+                threshold = 0.6
+
+                # If the minimum distance is below the threshold, mark attendance
+                if min_distance < threshold:
+                    id = studId[min_distance_index]
+                    studentInfo = db.reference(f'Students/{id}').get()
+                    if studentInfo is not None:
+                        datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S')
+                        secondsElapsed = (datetime.datetime.now() - datetimeObject).total_seconds()
+                        if secondsElapsed > 30:
+                            ref = db.reference(f'Students/{id}')
+                            studentInfo['total_attendance'] += 1
+                            ref.child('total_attendance').set(studentInfo['total_attendance'])
+                            ref.child('last_attendance').set(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                            marked_students += 1
+                        else:
+                            st.warning(f"{studentInfo['name']}'s attendance was already marked within the last 30 seconds.")
+                    else:
+                        st.warning(f"No student found with ID {id}.")
+
+            if marked_students == 0:
+                st.warning("No matching faces found in the uploaded image.")
+            else:
+                st.success(f"Attendance marked for {marked_students} students.")
 def get_attendance_data():
     pass
-
-# def download_csv(df):
-#     csv = df.to_csv(index=False)
-#     b64 = base64.b64encode(csv.encode()).decode()
-#     href = f'<a href="data:file/csv;base64,{b64}" download="attendance.csv">Download CSV file</a>'
-#     return href
  
 def check_attendance():
     st.subheader("Check Attendance")
