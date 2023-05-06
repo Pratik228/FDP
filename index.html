@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Capture Image</title>
+  </head>
+  <body>
+    <h1>Capture Image</h1>
+    <p>Click the button below to capture an image.</p>
+    <button onclick="captureImage()">Capture Image</button>
+    <a download="captured_image.jpg" id="downloadLink" style="display: none"
+      >Download Captured Image</a
+    >
+    <script>
+      async function captureImage() {
+        const video = document.createElement("video");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+        video.srcObject = stream;
+        await new Promise((resolve) =>
+          video.addEventListener("loadedmetadata", resolve)
+        );
+        video.play();
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext("2d").drawImage(video, 0, 0);
+        const dataURL = canvas.toDataURL("image/jpeg");
+
+        stream.getTracks().forEach((track) => track.stop());
+
+        document.getElementById("downloadLink").href = dataURL;
+        document.getElementById("downloadLink").style.display = "block";
+      }
+    </script>
+  </body>
+</html>

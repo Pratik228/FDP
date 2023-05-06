@@ -14,6 +14,7 @@ from firebase_admin import db
 from firebase_admin import storage
 from firebase_config import initialize_firebase
 from utils import load_known_encodings_and_ids
+from webcam_capture import webcam_capture
 
 bucket, ref, encodings_ref = initialize_firebase()
 
@@ -102,12 +103,13 @@ def store_student_details():
 #         # Destroy all windows
 #         cv2.destroyAllWindows()
 
-# Giving options to the userss
+# Giving options to the users
 def store_image():
     st.subheader("Store Image")
-    option = st.radio("Enter USN first then Select Option", ("Upload Image", "Take Photo"))
+    option = st.radio("Enter USN first then Select Option", ("Upload Image", "Take Photo", "Capture from Web"))
+    usn = st.text_input("Enter the USN of the student:")
     if option == "Upload Image":
-        usn = st.text_input("Enter the USN of the student:")
+        
         uploaded_file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png"])
         if uploaded_file is not None:
             file_name = f"Images/{usn}.jpg"
@@ -119,7 +121,7 @@ def store_image():
             blob.upload_from_filename(file_name)
             st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
     elif option == "Take Photo":
-        usn = st.text_input("Enter the USN of the student:")
+        # usn = st.text_input("Enter the USN of the student:")
         # Create the "Images" folder if it does not exist
         if not os.path.exists("Images"):
             os.makedirs("Images")

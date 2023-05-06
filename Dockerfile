@@ -1,28 +1,25 @@
-FROM python:3.7-slim-buster
+FROM python:3.7-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     build-essential \
-    ca-certificates \
     cmake \
-    git \
-    libgtk2.0-dev \
-    pkg-config \
-    wget \
-    dbus \
-    libgl1-mesa-glx\
-    sudo \
+    libopenblas-dev \
+    liblapack-dev \
+    libx11-dev \
+    libgtk-3-dev \
+    python3-dev \
+    python3-pip \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN echo "ALL ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Set up the working directory
 WORKDIR /app
-
-COPY requirements.txt requirements.txt
-
-RUN pip install numpy && \
-    pip install -r requirements.txt && \
-    pip install dlib
-
 COPY . .
 
-CMD ["streamlit", "run", "--server.port", "8080", "--server.headless", "true", "--server.enableCORS", "false", "attendance.py"]
+# Expose the port and run the app
+EXPOSE 8080
+CMD ["streamlit", "run", "attendance.py", "--server.port", "8080", "--server.enableCORS", "false"]

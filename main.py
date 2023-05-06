@@ -14,14 +14,6 @@ from firebase_config import initialize_firebase
 
 bucket, ref, encodings_ref = initialize_firebase()
 
-# cred = credentials.Certificate("serviceAccountKey.json")
-# firebase_admin.initialize_app(cred, {
-#     'databaseURL' : 'https://facialattendance-d2c63-default-rtdb.firebaseio.com/',
-#     'storageBucket' : 'facialattendance-d2c63.appspot.com'
-#     })
-
-# bucket = storage.bucket()
-
 def is_live(frame):
     # convert the frame to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -62,18 +54,6 @@ modePath = os.listdir(folderModePath)
 imgModeList = []
 for path in modePath:
     imgModeList.append(cv2.imread(os.path.join(folderModePath, path)))
-#import the encoding file
-
-# def load_known_encodings_and_ids():
-#     file = open('EncodeFile.p', 'rb')
-#     encodeKnownwithIds = pickle.load(file)
-#     file.close()
-#     encodeKnown, studId = encodeKnownwithIds
-#     return encodeKnown, studId
-# file = open('EncodeFile.p', 'rb')
-# encodeKnownwithIds = pickle.load(file)
-# file.close()
-# encodeKnown, studId = encodeKnownwithIds
 
 encodeKnown, studId = load_known_encodings_and_ids()
 #print(studId)
