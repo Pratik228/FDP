@@ -15,9 +15,11 @@ from firebase_admin import storage
 from firebase_config import initialize_firebase
 from utils import load_known_encodings_and_ids
 from webcam_capture import webcam_capture
+import pytz
 
 bucket, ref, encodings_ref = initialize_firebase()
 
+local_tz = pytz.timezone('Asia/Kolkata')
 def main():
     st.title("Student Attendance System")
     menu = ["Store Student Details","Store Student Image","Store Encodings" ,"Take Attendance", "Check Attendance"]
@@ -44,7 +46,7 @@ def store_student_details():
     department = st.text_input("Department")
     joined = st.text_input("Year of Joining")
     semester = st.text_input("Semester")
-    now = datetime.datetime.now()
+    now = datetime.datetime.now(local_tz)
     if st.button('Submit'):
         # Store the data in Firebase
         data = {
@@ -223,12 +225,12 @@ def take_attendance():
                     studentInfo = db.reference(f'Students/{id}').get()
                     if studentInfo is not None:
                         datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S')
-                        secondsElapsed = (datetime.datetime.now() - datetimeObject).total_seconds()
+                        secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
                         if secondsElapsed > 30:
                             ref = db.reference(f'Students/{id}')
                             studentInfo['total_attendance'] += 1
                             ref.child('total_attendance').set(studentInfo['total_attendance'])
-                            ref.child('last_attendance').set(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                            ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
                             marked_students += 1
                         else:
                             st.warning(f"{studentInfo['name']}'s attendance was already marked within the last 30 seconds.")
@@ -239,6 +241,48 @@ def take_attendance():
                 st.warning("No matching faces found in the uploaded image.")
             else:
                 st.success(f"Attendance marked for {marked_students} students.")
+    st.subheader("Manual Attendance")
+    st.write("Mark attendance for students who were not detected:")
+
+    # Get the attendance data from the "Students" node in the Firebase database
+    attendance_ref = db.reference('Students')
+    attendance_data = attendance_ref.get()
+    attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
+
+    # Get the last attendance date and time from the "last_attendance" column
+    last_attendance = attendance_df["last_attendance"]
+
+    # Check if the last attendance date matches today's date
+    today = datetime.datetime.now(local_tz).strftime("%Y-%m-%d")
+    absent_students = []
+    for i, date_time in last_attendance.items():
+        date = date_time.split(" ")[0]
+        if date != today:
+            absent_students.append(i)
+
+    # Show the list of students who were not marked present today and use checkboxes
+    students_to_mark = {}
+    if len(absent_students) > 0:
+        st.write("Students not marked present today:")
+        for usn in absent_students:
+            students_to_mark[usn] = st.checkbox(f"{usn}: {attendance_data[usn]['name']}")
+
+        # Provide an option to mark attendance manually
+        if st.button("Mark Attendance"):
+            for usn, mark_attendance in students_to_mark.items():
+                if mark_attendance:
+                    studentInfo = db.reference(f'Students/{usn}').get()
+                    if studentInfo is not None:
+                        ref = db.reference(f'Students/{usn}')
+                        studentInfo['total_attendance'] += 1
+                        ref.child('total_attendance').set(studentInfo['total_attendance'])
+                        ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
+                        st.success(f"Attendance marked for {studentInfo['name']}")
+                    else:
+                        st.warning(f"No student found with USN {usn}.")
+    else:
+        st.success("All students are marked present today.")
+
 def get_attendance_data():
     pass
  
@@ -256,7 +300,7 @@ def check_attendance():
     present_today = 0
 
     # Check if the last attendance date matches today's date
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    today = datetime.datetime.now(local_tz).strftime("%Y-%m-%d")
     for i, date_time in last_attendance.items():
         date = date_time.split(" ")[0]
         if date == today:
