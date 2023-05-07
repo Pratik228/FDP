@@ -57,7 +57,7 @@ for path in modePath:
 
 encodeKnown, studId = load_known_encodings_and_ids()
 #print(studId)
-datetimeObject = str(datetime.datetime.now(local_tz))
+datetimeObject = str(datetime.datetime.now())
 modeType = 0
 counter = 0
 id=-1
@@ -110,13 +110,13 @@ while True:
                     datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S')
                 # datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'],
                 #                                    "%Y-%m-%d %H:%M:%S")
-                secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
+                secondsElapsed = (datetime.datetime.now() - datetimeObject).total_seconds()
                 print(secondsElapsed)
                 if secondsElapsed > 30:
                     ref = db.reference(f'Students/{id}')
                     studentInfo['total_attendance'] += 1
                     ref.child('total_attendance').set(studentInfo['total_attendance'])
-                    ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
+                    ref.child('last_attendance').set(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 else:
                     modeType = 3
                     counter = 0
