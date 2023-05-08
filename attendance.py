@@ -20,12 +20,33 @@ import pytz
 bucket, ref, encodings_ref = initialize_firebase()
 
 local_tz = pytz.timezone('Asia/Kolkata')
+            
 def main():
-    st.title("Student Attendance System")
-    menu = ["Store Student Details","Store Student Image","Store Encodings" ,"Take Attendance", "Check Attendance"]
+    # st.title("Student Attendance System")
+    menu = ["Home","Store Student Details","Store Student Image","Store Encodings" ,"Take Attendance", "Check Attendance"]
     choice = st.sidebar.selectbox("Select Option", menu)
 
-    if choice == "Store Student Details":
+    if choice == "Home":
+        st.markdown(f"""
+            <style>
+                body {{
+                    background: linear-gradient(90deg, rgba(2,0,36,1) 0%, rgba(119,9,121,1) 35%, rgba(0,212,255,1) 100%);
+                    font-family: 'Arial', sans-serif;
+                }}
+                .home-text {{
+                    font-size: 40px;
+                    font-weight: bold;
+                    text-align: center;
+                    color: white;
+                    padding: 20px;
+                }}
+            </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown("<div class='home-text'>Welcome to the Student Attendance System</div>", unsafe_allow_html=True)
+        st.markdown("<div class='home-text'>Please select an option from the sidebar to get started.</div>", unsafe_allow_html=True)
+
+    elif choice == "Store Student Details":
         store_student_details()
 
     elif choice == "Store Student Image":
@@ -46,6 +67,7 @@ def store_student_details():
     department = st.text_input("Department")
     joined = st.text_input("Year of Joining")
     semester = st.text_input("Semester")
+    section = st.text_input("Section")
     now = datetime.datetime.now(local_tz)
     if st.button('Submit'):
         # Store the data in Firebase
@@ -55,6 +77,7 @@ def store_student_details():
             'joined': joined,
             'total_attendance': 0,
             'semester': semester,
+            'section': section,
             'last_attendance': str(now.strftime("%Y-%m-%d %H:%M:%S"))
         }
         ref.child(student_id).set(data)
@@ -186,6 +209,8 @@ def _css_to_rect(css):
 
 def take_attendance():
     st.subheader("Take Attendance")
+    semester = st.selectbox("Select Semester", options=[1, 2, 3, 4, 5, 6, 7, 8])
+    section = st.selectbox("Select Section", options=["A", "B", "C", "D"])
     option = st.radio("Select Option", ("Live Video", "Upload Image"))
     if option == "Live Video":
         if st.button("Take Attendance"):
@@ -199,7 +224,8 @@ def take_attendance():
             img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
             # Resize image for faster processing
-            img = cv2.resize(img, (0, 0), fx=0.25, fy=0.25)
+            img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+
 
             # Detect faces in the image
             face_locations = face_recognition.face_locations(img)
@@ -224,8 +250,9 @@ def take_attendance():
                     id = studId[min_distance_index]
                     studentInfo = db.reference(f'Students/{id}').get()
                     if studentInfo is not None:
-                        datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S')
+                        datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=local_tz)
                         secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
+
                         if secondsElapsed > 30:
                             ref = db.reference(f'Students/{id}')
                             studentInfo['total_attendance'] += 1
@@ -243,57 +270,71 @@ def take_attendance():
                 st.success(f"Attendance marked for {marked_students} students.")
     st.subheader("Manual Attendance")
     st.write("Mark attendance for students who were not detected:")
+    if st.button("Load Unmarked Students"):
+        # Get the attendance data from the "Students" node in the Firebase database
+        attendance_ref = db.reference('Students')
+        attendance_data = attendance_ref.get()
+        # attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
+        attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
+        attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section)]
 
-    # Get the attendance data from the "Students" node in the Firebase database
-    attendance_ref = db.reference('Students')
-    attendance_data = attendance_ref.get()
-    attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
 
-    # Get the last attendance date and time from the "last_attendance" column
-    last_attendance = attendance_df["last_attendance"]
+        # Get the last attendance date and time from the "last_attendance" column
+        last_attendance = attendance_df["last_attendance"]
 
-    # Check if the last attendance date matches today's date
-    today = datetime.datetime.now(local_tz).strftime("%Y-%m-%d")
-    absent_students = []
-    for i, date_time in last_attendance.items():
-        date = date_time.split(" ")[0]
-        if date != today:
-            absent_students.append(i)
+        # Check if the last attendance date matches today's date
+        today = datetime.datetime.now(local_tz).strftime("%Y-%m-%d")
+        absent_students = []
+        for i, date_time in last_attendance.items():
+            date = date_time.split(" ")[0]
+            if date != today:
+                absent_students.append(i)
+        ############## For Testing purpose ###################### 
+        # for i, date_time in last_attendance.items():
+        #     datetimeObject = datetime.datetime.strptime(date_time, '%Y-%m-%d %H:%M:%S').replace(tzinfo=local_tz)
+        #     secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
+        #     if secondsElapsed > 30:
+        #         absent_students.append(i)
 
-    # Show the list of students who were not marked present today and use checkboxes
-    students_to_mark = {}
-    if len(absent_students) > 0:
-        st.write("Students not marked present today:")
-        for usn in absent_students:
-            students_to_mark[usn] = st.checkbox(f"{usn}: {attendance_data[usn]['name']}")
 
-        # Provide an option to mark attendance manually
-        if st.button("Mark Attendance"):
-            for usn, mark_attendance in students_to_mark.items():
-                if mark_attendance:
-                    studentInfo = db.reference(f'Students/{usn}').get()
-                    if studentInfo is not None:
-                        ref = db.reference(f'Students/{usn}')
-                        studentInfo['total_attendance'] += 1
-                        ref.child('total_attendance').set(studentInfo['total_attendance'])
-                        ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
-                        st.success(f"Attendance marked for {studentInfo['name']}")
-                    else:
-                        st.warning(f"No student found with USN {usn}.")
-    else:
-        st.success("All students are marked present today.")
+        # Show the list of students who were not marked present today and use checkboxes
+        students_to_mark = {}
+        if len(absent_students) > 0:
+            st.write("Students not marked present today:")
+            for usn in absent_students:
+                students_to_mark[usn] = st.checkbox(f"{usn}: {attendance_data[usn]['name']}")
 
-def get_attendance_data():
-    pass
+            # Provide an option to mark attendance manually
+            if st.button("Mark Attendance"):
+                for usn, mark_attendance in students_to_mark.items():
+                    if mark_attendance:
+                        studentInfo = db.reference(f'Students/{usn}').get()
+                        if studentInfo is not None:
+                            ref = db.reference(f'Students/{usn}')
+                            studentInfo['total_attendance'] += 1
+                            ref.child('total_attendance').set(studentInfo['total_attendance'])
+                            ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
+                            st.success(f"Attendance marked for {studentInfo['name']}")
+                        else:
+                            st.warning(f"No student found with USN {usn}.")
+        else:
+            st.success("All students are marked present today.")
+
  
 def check_attendance():
     st.subheader("Check Attendance")
     # Get the attendance data from the "Students" node in the Firebase database
+    semester = st.selectbox("Select Semester", options=[1, 2, 3, 4, 5, 6, 7, 8])
+    section = st.selectbox("Select Section", options=["A", "B", "C", "D"])
+
     attendance_ref = db.reference('Students')
     attendance_data = attendance_ref.get()
 
     # Create a pandas dataframe from the attendance data
+    # attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
     attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
+    attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section)]
+
 
     # Get the last attendance date and time from the "last_attendance" column
     last_attendance = attendance_df["last_attendance"]
@@ -313,7 +354,9 @@ def check_attendance():
     if present_today == 0:
         st.warning("No students are present today.")
     else:
-        st.success(f"{present_today} students are present today!")
+        # st.success(f"{present_today} students are present today!")
+        st.success(f"{present_today} students are present in section {section} today!")
+
     # Create a button to download the CSV file
     csv = attendance_df.to_csv(index=False)
     b64 = base64.b64encode(csv.encode()).decode()
