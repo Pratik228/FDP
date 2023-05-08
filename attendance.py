@@ -211,6 +211,7 @@ def take_attendance():
     st.subheader("Take Attendance")
     semester = st.selectbox("Select Semester", options=[1, 2, 3, 4, 5, 6, 7, 8])
     section = st.selectbox("Select Section", options=["A", "B", "C", "D"])
+    department = st.selectbox("Select department", options = ["CSE", "ISE", "ECE", "EEE", "AI&ML", "DS", "Mech", "Civil"])
     option = st.radio("Select Option", ("Live Video", "Upload Image"))
     if option == "Live Video":
         if st.button("Take Attendance"):
@@ -243,7 +244,7 @@ def take_attendance():
                 min_distance = distances[min_distance_index]
 
                 # Set a threshold for the minimum distance to consider a match
-                threshold = 0.6
+                threshold = 0.7
 
                 # If the minimum distance is below the threshold, mark attendance
                 if min_distance < threshold:
@@ -276,7 +277,7 @@ def take_attendance():
         attendance_data = attendance_ref.get()
         # attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
         attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
-        attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section)]
+        attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department']==department)]
 
 
         # Get the last attendance date and time from the "last_attendance" column
@@ -326,6 +327,7 @@ def check_attendance():
     # Get the attendance data from the "Students" node in the Firebase database
     semester = st.selectbox("Select Semester", options=[1, 2, 3, 4, 5, 6, 7, 8])
     section = st.selectbox("Select Section", options=["A", "B", "C", "D"])
+    department = st.selectbox("Select department", options = ["CSE", "ISE", "ECE", "EEE", "AI&ML", "DS", "Mech", "Civil"])
 
     attendance_ref = db.reference('Students')
     attendance_data = attendance_ref.get()
@@ -333,7 +335,7 @@ def check_attendance():
     # Create a pandas dataframe from the attendance data
     # attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
     attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
-    attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section)]
+    attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department']==department)]
 
 
     # Get the last attendance date and time from the "last_attendance" column
