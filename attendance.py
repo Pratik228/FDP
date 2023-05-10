@@ -16,7 +16,14 @@ from firebase_config import initialize_firebase
 from utils import load_known_encodings_and_ids
 from webcam_capture import webcam_capture
 import pytz
+from PIL import Image
 
+# Load your logo image
+logo = Image.open("cmr.png")
+
+# Display the logo and navigation bar
+st.image(logo, width=150)
+# Add a welcome message and a description of the attendance system
 bucket, ref, encodings_ref = initialize_firebase()
 
 local_tz = pytz.timezone('Asia/Kolkata')
@@ -27,24 +34,15 @@ def main():
     choice = st.sidebar.selectbox("Select Option", menu)
 
     if choice == "Home":
-        st.markdown(f"""
-            <style>
-                body {{
-                    background: linear-gradient(90deg, rgba(2,0,36,1) 0%, rgba(119,9,121,1) 35%, rgba(0,212,255,1) 100%);
-                    font-family: 'Arial', sans-serif;
-                }}
-                .home-text {{
-                    font-size: 40px;
-                    font-weight: bold;
-                    text-align: center;
-                    color: white;
-                    padding: 20px;
-                }}
-            </style>
-        """, unsafe_allow_html=True)
 
-        st.markdown("<div class='home-text'>Welcome to the Student Attendance System</div>", unsafe_allow_html=True)
-        st.markdown("<div class='home-text'>Please select an option from the sidebar to get started.</div>", unsafe_allow_html=True)
+        st.title("Welcome to the Attendance System")
+        st.write(
+            """
+            This attendance system uses facial recognition to mark attendance for students.
+            It allows you to register new students, take attendance using live video or uploaded images, 
+            store images for each student, and view attendance records. 
+            """
+        )
 
     elif choice == "Store Student Details":
         store_student_details()
@@ -128,65 +126,123 @@ def store_student_details():
 #         # Destroy all windows
 #         cv2.destroyAllWindows()
 
+## Encodings IDEA
+# Load existing encodings and student IDs
+with open("EncodeFile.p", "rb") as f:
+    encodeKnown, studId = pickle.load(f)
+
+
+
+
 # Giving options to the users
 def store_image():
     st.subheader("Store Image")
-    option = st.radio("Enter USN first then Select Option", ("Upload Image", "Take Photo", "Capture from Web"))
+    option = st.radio("Enter USN first then Select Option", ("Upload Image", "Take Photo"))
     usn = st.text_input("Enter the USN of the student:")
-    if option == "Upload Image":
+
+    def get_encoding(image_path):
+        img = cv2.imread(image_path)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         
+        face_locations = face_recognition.face_locations(img)
+        if len(face_locations) > 0:
+            encode = face_recognition.face_encodings(img, face_locations)[0]
+            return encode
+        return None
+    
+    if option == "Upload Image":
         uploaded_file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png"])
         if uploaded_file is not None:
-            file_name = f"Images/{usn}.jpg"
-            with open(file_name, "wb") as f:
-                f.write(uploaded_file.read())
-            st.write(f"Saved photo as {file_name}")
-            # Upload the image to Firebase Storage
-            blob = bucket.blob("Images/" + f"{usn}.jpg")
-            blob.upload_from_filename(file_name)
-            st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
-    elif option == "Take Photo":
-        # usn = st.text_input("Enter the USN of the student:")
-        # Create the "Images" folder if it does not exist
-        if not os.path.exists("Images"):
-            os.makedirs("Images")
-        # Initialize the webcam
-        cap = cv2.VideoCapture(0)
-        st.write("Please look at the camera and come a little closer. The camera will automatically capture your photo once your face is properly detected.")
+            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
+            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
-        # Take a single photo
-        while True:
-            # Capture a frame from the webcam
-            ret, frame = cap.read()
+            # Show a preview of the uploaded image
+            st.image(img, caption="Preview of the uploaded image", width = 200)
 
-            # Resize image for faster processing
-            small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-
-            # Detect faces in the frame
-            face_locations = face_recognition.face_locations(small_frame)
-
-            # If a face is detected, capture the photo
-            if len(face_locations) == 1:
+            # Add an "Upload" button
+            if st.button("Upload"):
                 file_name = f"Images/{usn}.jpg"
-                cv2.imwrite(file_name, frame)
+                with open(file_name, "wb") as f:
+                    f.write(uploaded_file.read())
                 st.write(f"Saved photo as {file_name}")
-
                 # Upload the image to Firebase Storage
                 blob = bucket.blob("Images/" + f"{usn}.jpg")
                 blob.upload_from_filename(file_name)
                 st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
 
-                break
+                 # Calculate and store the encoding of the new student's image
+                new_encoding = get_encoding(file_name)
+                if new_encoding is not None:
+                    encodeKnown.append(new_encoding)
+                    studId.append(usn)
 
-            # Check if the user pressed 'q' to quit
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+                    # Update the pickle file
+                    with open("EncodeFile.p", "wb") as f:
+                        pickle.dump([encodeKnown, studId], f)
+                    st.success("Encodings updated successfully.")
+                else:
+                    st.warning("Could not detect a face in the uploaded image.")
 
-        # Release the webcam
-        cap.release()
+    elif option == "Take Photo":
+        # Create the "Images" folder if it does not exist
+        if not os.path.exists("Images"):
+            os.makedirs("Images")
+        
+        def capture_photo():
+            # Initialize the webcam
+            cap = cv2.VideoCapture(0)
+            st.write("Please look at the camera and come a little closer. The camera will automatically capture your photo once your face is properly detected.")
 
-        # Destroy all windows
-        cv2.destroyAllWindows()
+            # Take a single photo
+            while True:
+                # Capture a frame from the webcam
+                ret, frame = cap.read()
+
+                # Resize image for faster processing
+                small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
+
+                # Detect faces in the frame
+                face_locations = face_recognition.face_locations(small_frame)
+
+                # If a face is detected, capture the photo
+                if len(face_locations) == 1:
+                    file_name = f"Images/{usn}.jpg"
+                    cv2.imwrite(file_name, frame)
+                    st.write(f"Saved photo as {file_name}")
+
+                    # Upload the image to Firebase Storage
+                    blob = bucket.blob("Images/" + f"{usn}.jpg")
+                    blob.upload_from_filename(file_name)
+                    st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
+                    new_encoding = get_encoding(file_name)
+                    if new_encoding is not None:
+                        encodeKnown.append(new_encoding)
+                        studId.append(usn)
+
+                        # Update the pickle file
+                        with open("EncodeFile.p", "wb") as f:
+                            pickle.dump([encodeKnown, studId], f)
+                        st.success("Encodings updated successfully.")
+                    else:
+                        st.warning("Could not detect a face in the captured photo.")
+                    break
+
+                # Check if the user pressed 'q' to quit
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+            # Release the webcam
+            cap.release()
+
+            # Destroy all windows
+            cv2.destroyAllWindows()
+            
+            return file_name
+
+        if st.button("Take Photo"):
+            captured_photo = capture_photo()
+            st.image(captured_photo, caption=f"Captured photo for USN {usn}", width=200)
+
 
 def store_encodings():
     st.subheader("Store Encodings")
@@ -226,10 +282,12 @@ def take_attendance():
 
             # Resize image for faster processing
             img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+            
 
 
             # Detect faces in the image
-            face_locations = face_recognition.face_locations(img)
+            face_locations = face_recognition.face_locations(img) # model="cnn"
+
             face_encodings = face_recognition.face_encodings(img, face_locations)
 
             # Load known encodings and student IDs
@@ -271,14 +329,19 @@ def take_attendance():
                 st.success(f"Attendance marked for {marked_students} students.")
     st.subheader("Manual Attendance")
     st.write("Mark attendance for students who were not detected:")
+
+    if "load_unmarked_students" not in st.session_state:
+        st.session_state.load_unmarked_students = False
+
     if st.button("Load Unmarked Students"):
+        st.session_state.load_unmarked_students = True
+
+    if st.session_state.load_unmarked_students:
         # Get the attendance data from the "Students" node in the Firebase database
         attendance_ref = db.reference('Students')
         attendance_data = attendance_ref.get()
-        # attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
         attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
-        attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department']==department)]
-
+        attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department'] == department)]
 
         # Get the last attendance date and time from the "last_attendance" column
         last_attendance = attendance_df["last_attendance"]
@@ -290,13 +353,6 @@ def take_attendance():
             date = date_time.split(" ")[0]
             if date != today:
                 absent_students.append(i)
-        ############## For Testing purpose ###################### 
-        # for i, date_time in last_attendance.items():
-        #     datetimeObject = datetime.datetime.strptime(date_time, '%Y-%m-%d %H:%M:%S').replace(tzinfo=local_tz)
-        #     secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
-        #     if secondsElapsed > 30:
-        #         absent_students.append(i)
-
 
         # Show the list of students who were not marked present today and use checkboxes
         students_to_mark = {}
@@ -320,6 +376,7 @@ def take_attendance():
                             st.warning(f"No student found with USN {usn}.")
         else:
             st.success("All students are marked present today.")
+
 
  
 def check_attendance():
