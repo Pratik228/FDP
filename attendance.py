@@ -134,6 +134,18 @@ with open("EncodeFile.p", "rb") as f:
 
 
 
+#
+# '''
+#     Add class for store_image and return the object then in the main driver function call like this
+
+#         image = storeImage()
+#         image.get_encoding()
+
+#     or  
+
+#         storeimage().get_encoding()
+# '''
+
 # Giving options to the users
 def store_image():
     st.subheader("Store Image")
@@ -150,6 +162,10 @@ def store_image():
             return encode
         return None
     
+
+    #Use switch statement for options, abstract the details of the code in a seperate class
+
+
     if option == "Upload Image":
         uploaded_file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png"])
         if uploaded_file is not None:
@@ -163,7 +179,7 @@ def store_image():
             if st.button("Upload"):
                 file_name = f"Images/{usn}.jpg"
                 with open(file_name, "wb") as f:
-                    f.write(uploaded_file.read())
+                    f.write(file_bytes)  # Use file_bytes instead of uploaded_file.read()
                 st.write(f"Saved photo as {file_name}")
                 # Upload the image to Firebase Storage
                 blob = bucket.blob("Images/" + f"{usn}.jpg")
