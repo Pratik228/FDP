@@ -57,6 +57,9 @@ for path in modePath:
 
 encodeKnown, studId = load_known_encodings_and_ids()
 #print(studId)
+num_correct = 0
+total_faces = 0
+
 datetimeObject = str(datetime.datetime.now())
 modeType = 0
 counter = 0
@@ -85,6 +88,7 @@ while True:
 
             if matches[matchIndex]:
                 print("Face Detected")
+                num_correct += 1
                 print(studId[matchIndex])
                 y1, x2, y2, x1 = faceLoc
                 y1, x2, y2, x1 = y1*4, x2*4, y2*4, x1*4
@@ -97,6 +101,7 @@ while True:
                     cv2.waitKey(1)
                     counter=1
                     modeType=1
+            total_faces += 1
         if counter!=0:
             if counter ==1:
                 studentInfo = db.reference(f'Students/{id}').get()
@@ -154,7 +159,9 @@ while True:
                     modeType = 0
                     studentInfo = []
                     imgStudent = []
-                    # imgBackground[44:44 + 633, 808:808 + 414] = imgModeList[modeType]
+        accuracy = num_correct / total_faces
+        print(f"Accuracy: {accuracy * 100:.2f}%")
+            # imgBackground[44:44 + 633, 808:808 + 414] = imgModeList[modeType]
     else:
         modeType = 0
         counter = 0
