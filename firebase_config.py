@@ -12,8 +12,8 @@ def initialize_firebase():
         firebase_admin.get_app()
     except ValueError:
         firebase_admin.initialize_app(cred, {
-            'databaseURL': 'https://facialattendance-d2c63-default-rtdb.firebaseio.com/',
-            'storageBucket': 'facialattendance-d2c63.appspot.com'
+            'databaseURL': '',
+            'storageBucket': ''
         })
 
     ref = db.reference('Students')
