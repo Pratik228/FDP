@@ -28,13 +28,13 @@ Welcome to the incredible Face Detection Project! 🎉 This cutting-edge attenda
 1. Clone the repository:
 
    ```
-   git clone https://github.com/your-username/face-detection-project.git
+   git clone https://github.com/Pratik228/FDP.git
    ```
 
 2. Navigate to the project directory:
 
    ```
-   cd face-detection-project
+   cd FDP
    ```
 
 3. Create a virtual environment (optional but recommended):
@@ -74,7 +74,7 @@ Welcome to the incredible Face Detection Project! 🎉 This cutting-edge attenda
 
 8. Run the application:
    ```
-   streamlit run app.py
+   streamlit run attendance.py
    ```
 
 ## 🚀 Usage (aka the fun part) 🚀
