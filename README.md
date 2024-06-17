@@ -101,6 +101,8 @@ Welcome to the incredible Face Detection Project! 🎉 This cutting-edge attenda
 
 ![alt text](image-5.png)
 
+![alt text](image-6.png)
+
 ## 🤝 Contributing (aka joining the cool club) 🤝
 
 Want to be a part of the cool club? Contributions are welcome! If you find any issues or have suggestions for improvement, please create an issue or submit a pull request. Let's make this project even more awesome together! 💪
