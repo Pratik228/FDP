@@ -89,19 +89,7 @@ Welcome to the incredible Face Detection Project! 🎉 This cutting-edge attenda
 
 ## 📸 Screenshots (because a picture is worth a thousand words) 📸
 
-![alt text](image.png)
-
-![alt text](image-1.png)
-
-![alt text](image-2.png)
-
-![alt text](image-3.png)
-
-![alt text](image-4.png)
-
-![alt text](image-5.png)
-
-![alt text](image-6.png)
+![Screenshot Animation](image.gif)
 
 ## 🤝 Contributing (aka joining the cool club) 🤝
 
