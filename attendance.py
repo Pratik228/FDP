@@ -17,140 +17,263 @@ from utils import load_known_encodings_and_ids
 from webcam_capture import webcam_capture
 import pytz
 from PIL import Image
+from constants import DEPARTMENTS, SECTIONS, SEMESTERS, JOINING_YEARS
+import re
+
+st.set_page_config(
+    page_title="Student Attendance System",
+    page_icon="📚",
+    layout="wide"
+)
+
+# Custom CSS
+st.markdown("""
+<style>
+.big-font {
+    font-size:30px !important;
+    font-weight: bold;
+}
+.stButton>button {
+    width: 100%;
+}
+.stSelectbox {
+    margin-bottom: 10px;
+}
+.stDataFrame {
+    margin-bottom: 20px;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Rest of your imports and global variables
+bucket, ref, encodings_ref = initialize_firebase()
+local_tz = pytz.timezone('Asia/Kolkata')
 
 # Load your logo image
 logo = Image.open("cmr.png")
 
-# Display the logo and navigation bar
-st.image(logo, width=150)
-# Add a welcome message and a description of the attendance system
-bucket, ref, encodings_ref = initialize_firebase()
-
-local_tz = pytz.timezone('Asia/Kolkata')
-            
 def main():
-    # st.title("Student Attendance System")
-    menu = ["Home","Store Student Details","Store Student Image","Store Encodings" ,"Take Attendance", "Check Attendance"]
-    choice = st.sidebar.selectbox("Select Option", menu)
+    # Remove the set_page_config() call from here
+    st.sidebar.image(logo, width=150)
+    st.sidebar.markdown("<p class='big-font'>Menu</p>", unsafe_allow_html=True)
+    
+    menu = ["Home", "Store Student Details", "Store Student Image", "Take Attendance", "Check Attendance", "Manage Students"]
+    choice = st.sidebar.radio("", menu)
 
     if choice == "Home":
-
-        st.title("Welcome to the Attendance System")
-        st.write(
-            """
-            This attendance system uses facial recognition to mark attendance for students.
-            It allows you to register new students, take attendance using live video or uploaded images, 
-            store images for each student, and view attendance records. 
-            """
-        )
-
+        show_home()
     elif choice == "Store Student Details":
         store_student_details()
-
     elif choice == "Store Student Image":
         store_image()
-    elif choice == "Store Encodings":
-        store_encodings()
-
     elif choice == "Take Attendance":
         take_attendance()
-
     elif choice == "Check Attendance":
         check_attendance()
+    elif choice == "Manage Students":
+        manage_students()
+
+def show_home():
+    st.markdown("<h1 style='text-align: center;'>Welcome to the Student Attendance System</h1>", unsafe_allow_html=True)
+    
+    st.write("")
+    col1, col2, col3 = st.columns([1,2,1])
+    
+    st.write("")
+    st.markdown("""
+    This attendance system uses facial recognition to mark attendance for students.
+    It allows you to:
+    - Register new students
+    - Take attendance using live video or uploaded images
+    - Store images for each student
+    - View and manage attendance records
+    """)
 
 def store_student_details():
-    st.subheader("Store Student Details")
-    student_id = st.text_input("Student ID")
-    name = st.text_input("Name")
-    department = st.text_input("Department")
-    joined = st.text_input("Year of Joining")
-    semester = st.text_input("Semester")
-    section = st.text_input("Section")
-    now = datetime.datetime.now(local_tz)
-    if st.button('Submit'):
-        # Store the data in Firebase
-        data = {
-            'name': name,
-            'department': department,
-            'joined': joined,
-            'total_attendance': 0,
-            'semester': semester,
-            'section': section,
-            'last_attendance': str(now.strftime("%Y-%m-%d %H:%M:%S"))
-        }
-        ref.child(student_id).set(data)
+    st.markdown("<h2 style='text-align: center; color: #4a4a4a;'>Store Student Details</h2>", unsafe_allow_html=True)
+    
+    st.markdown("""
+    <style>
+    .student-form {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .form-header {
+        color: #4a4a4a;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-        st.success('Success! Data submitted for ' + name)
-#  Original one
-# def store_image():
-#     st.subheader("Store Image")
-#     usn = st.text_input("Enter the USN of the student:")
-#     if st.button('Take Photo'):
-#         # Create the "Images" folder if it does not exist
-#         if not os.path.exists("Images"):
-#             os.makedirs("Images")
-#         # Initialize the webcam
-#         cap = cv2.VideoCapture(0)
+    with st.form("student_details_form"):
+        st.markdown('<p class="form-header">Enter Student Information</p>', unsafe_allow_html=True)
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            student_id = st.text_input("Student ID (USN)", max_chars=10).upper()
+            name = st.text_input("Name")
+            department = st.selectbox("Department", options=DEPARTMENTS)
+        
+        with col2:
+            joined = st.selectbox("Year of Joining", options=JOINING_YEARS)
+            semester = st.selectbox("Semester", options=SEMESTERS)
+            section = st.selectbox("Section", options=SECTIONS)
 
-#         # Take a single photo
-#         while True:
-#             # Capture a frame from the webcam
-#             ret, frame = cap.read()
+        submit_button = st.form_submit_button("Submit")
 
-#             # Display the frame
-#             cv2.imshow("Webcam", frame)
+    if submit_button:
+        with st.spinner("Processing..."):
+            # Validate USN
+            if not re.match(r'^[A-Z0-9]{10}$', student_id):
+                st.error("Invalid USN. It should be 10 characters long and contain only uppercase letters and numbers.")
+                return
 
-#             # Check if the user pressed 'q' to quit
-#             if cv2.waitKey(1) & 0xFF == ord('q'):
-#                 break
+            # Check if USN already exists
+            if db.reference(f'Students/{student_id}').get() is not None:
+                st.error(f"A student with USN {student_id} already exists.")
+                return
 
-#             # Check if the user clicked the left mouse button
-#             if cv2.waitKey(1) & 0xFF == ord(' '):  # Space bar is ASCII 32
-#                 # Save the photo as "USN.jpg" in the "Images" folder
-#                 file_name = f"Images/{usn}.jpg"
-#                 cv2.imwrite(file_name, frame)
-#                 st.write(f"Saved photo as {file_name}")
+            # Validate Name
+            if not name or not re.match(r'^[A-Za-z\s]+$', name):
+                st.error("Please enter a valid name (only letters and spaces allowed).")
+                return
 
-#                 # Upload the image to Firebase Storage
-#                 blob = bucket.blob("Images/" + f"{usn}.jpg")
+            # All validations passed, store the data in Firebase
+            now = datetime.datetime.now(local_tz)
+            data = {
+                'name': name,
+                'department': department,
+                'joined': joined,
+                'total_attendance': 0,
+                'semester': semester,
+                'section': section,
+                'last_attendance': str(now.strftime("%Y-%m-%d %H:%M:%S"))
+            }
+            ref.child(student_id).set(data)
 
-#                 blob.upload_from_filename(file_name)
+            st.success(f'Success! Data submitted for {name} with USN {student_id}')
+            
+            # Display submitted data
+            st.markdown("### Submitted Data")
+            st.json(data)
 
-#                 st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
+    st.markdown('<div class="student-form">', unsafe_allow_html=True)
+    st.markdown("#### Instructions:")
+    st.markdown("1. Fill in all the fields with accurate information.")
+    st.markdown("2. USN should be 10 characters long, containing only uppercase letters and numbers.")
+    st.markdown("3. Name should only contain letters and spaces.")
+    st.markdown("4. Make sure to select the correct Department, Year of Joining, Semester, and Section.")
+    st.markdown("5. Click 'Submit' when you're done.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
-#                 break
+def manage_students():
+    st.markdown("<h2 style='text-align: center; color: #4a4a4a;'>Manage Students</h2>", unsafe_allow_html=True)
 
-#         # Release the webcam
-#         cap.release()
+    # Use session state to keep track of changes
+    if 'refresh_trigger' not in st.session_state:
+        st.session_state.refresh_trigger = False
 
-#         # Destroy all windows
-#         cv2.destroyAllWindows()
+    # Fetch all students
+    students_ref = db.reference('Students')
+    students_data = students_ref.get()
 
-## Encodings IDEA
-# Load existing encodings and student IDs
-with open("EncodeFile.p", "rb") as f:
-    encodeKnown, studId = pickle.load(f)
+    if not students_data:
+        st.warning("No students found in the database.")
+        return
+
+    # Convert to DataFrame
+    df = pd.DataFrame.from_dict(students_data, orient='index')
+    df.reset_index(inplace=True)
+    df.rename(columns={'index': 'USN'}, inplace=True)
+
+    # Display students in an expandable section
+    with st.expander("View All Students", expanded=True):
+        st.dataframe(df.style.set_properties(**{'background-color': '#f0f2f6', 'color': '#1e1e1e'}))
+
+    # Edit and Delete options
+    st.markdown("<h3 style='color: #4a4a4a;'>Edit or Delete Student</h3>", unsafe_allow_html=True)
+    selected_usn = st.selectbox("Select a student", df['USN'].tolist())
+
+    if selected_usn:
+        student = students_data[selected_usn]
+        
+        with st.form(key=f"edit_student_form_{selected_usn}"):
+            col1, col2 = st.columns(2)
+            with col1:
+                name = st.text_input("Name", value=student.get('name', ''))
+                department = st.selectbox("Department", options=DEPARTMENTS, index=DEPARTMENTS.index(student.get('department', DEPARTMENTS[0])))
+                joined = st.selectbox("Year of Joining", options=JOINING_YEARS, index=JOINING_YEARS.index(int(student.get('joined', JOINING_YEARS[0]))))
+            with col2:
+                semester = st.selectbox("Semester", options=SEMESTERS, index=SEMESTERS.index(int(student.get('semester', SEMESTERS[0]))))
+                section = st.selectbox("Section", options=SECTIONS, index=SECTIONS.index(student.get('section', SECTIONS[0])))
+
+            col1, col2 = st.columns(2)
+            with col1:
+                update_button = st.form_submit_button("Update Student")
+            with col2:
+                delete_button = st.form_submit_button("Delete Student")
+
+        if update_button:
+            with st.spinner("Updating student information..."):
+                updated_data = {
+                    'name': name,
+                    'department': department,
+                    'joined': joined,
+                    'semester': semester,
+                    'section': section,
+                    'total_attendance': student.get('total_attendance', 0),
+                    'last_attendance': student.get('last_attendance', '')
+                }
+                students_ref.child(selected_usn).update(updated_data)
+                st.success(f"Student {selected_usn} updated successfully!")
+                st.session_state.refresh_trigger = True
+
+        if delete_button:
+            with st.spinner("Deleting student..."):
+                students_ref.child(selected_usn).delete()
+                st.success(f"Student {selected_usn} deleted successfully!")
+                st.session_state.refresh_trigger = True
+
+    
 
 
-
-
-#
-# '''
-#     Add class for store_image and return the object then in the main driver function call like this
-
-#         image = storeImage()
-#         image.get_encoding()
-
-#     or  
-
-#         storeimage().get_encoding()
-# '''
-
-# Giving options to the users
 def store_image():
-    st.subheader("Store Image")
-    option = st.radio("Enter USN first then Select Option", ("Upload Image", "Take Photo"))
+    st.markdown("<h2 style='text-align: center; color: #4a4a4a;'>Store Student Image</h2>", unsafe_allow_html=True)
+
+    # Custom CSS
+    st.markdown("""
+    <style>
+    .stButton > button {
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+    }
+    .upload-section, .capture-section {
+        background-color: #f0f2f6;
+        padding: 20px;
+        border-radius: 10px;
+        margin-top: 20px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     usn = st.text_input("Enter the USN of the student:")
+    
+    if not usn:
+        st.warning("Please enter a USN before proceeding.")
+        return
+
+    option = st.radio("Select Option", ("Upload Image", "Take Photo"))
 
     def get_encoding(image_path):
         img = cv2.imread(image_path)
@@ -161,103 +284,72 @@ def store_image():
             encode = face_recognition.face_encodings(img, face_locations)[0]
             return encode
         return None
-    
 
-    #Use switch statement for options, abstract the details of the code in a seperate class
+    def process_and_store_image(image):
+        with st.spinner("Processing image..."):
+            file_name = f"Images/{usn}.jpg"
+            cv2.imwrite(file_name, image)
+            st.success(f"Saved photo as {file_name}")
+            
+            # Upload the image to Firebase Storage
+            blob = bucket.blob("Images/" + f"{usn}.jpg")
+            blob.upload_from_filename(file_name)
+            st.success("Saved photo to Firebase Storage")
 
+            # Calculate and store the encoding of the new student's image
+            new_encoding = get_encoding(file_name)
+            if new_encoding is not None:
+                encodeKnown.append(new_encoding)
+                studId.append(usn)
+
+                # Update the pickle file
+                with open("EncodeFile.p", "wb") as f:
+                    pickle.dump([encodeKnown, studId], f)
+                st.success("Encodings updated successfully.")
+            else:
+                st.error("Could not detect a face in the image.")
 
     if option == "Upload Image":
+        st.markdown("<div class='upload-section'>", unsafe_allow_html=True)
         uploaded_file = st.file_uploader("Choose an image file", type=["jpg", "jpeg", "png"])
         if uploaded_file is not None:
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
             img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
 
             # Show a preview of the uploaded image
-            st.image(img, caption="Preview of the uploaded image", width = 200)
+            st.image(img, caption="Preview of the uploaded image", width=300)
 
             # Add an "Upload" button
-            if st.button("Upload"):
-                file_name = f"Images/{usn}.jpg"
-                with open(file_name, "wb") as f:
-                    f.write(file_bytes)  # Use file_bytes instead of uploaded_file.read()
-                st.write(f"Saved photo as {file_name}")
-                # Upload the image to Firebase Storage
-                blob = bucket.blob("Images/" + f"{usn}.jpg")
-                blob.upload_from_filename(file_name)
-                st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
-
-                 # Calculate and store the encoding of the new student's image
-                new_encoding = get_encoding(file_name)
-                if new_encoding is not None:
-                    encodeKnown.append(new_encoding)
-                    studId.append(usn)
-
-                    # Update the pickle file
-                    with open("EncodeFile.p", "wb") as f:
-                        pickle.dump([encodeKnown, studId], f)
-                    st.success("Encodings updated successfully.")
-                else:
-                    st.warning("Could not detect a face in the uploaded image.")
+            if st.button("Upload and Process"):
+                process_and_store_image(img)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     elif option == "Take Photo":
+        st.markdown("<div class='capture-section'>", unsafe_allow_html=True)
         # Create the "Images" folder if it does not exist
         if not os.path.exists("Images"):
             os.makedirs("Images")
         
-        def capture_photo():
+        st.write("Please look at the camera and come a little closer. Click 'Capture Photo' when ready.")
+        
+        if st.button("Capture Photo"):
             # Initialize the webcam
             cap = cv2.VideoCapture(0)
-            st.write("Please look at the camera and come a little closer. The camera will automatically capture your photo once your face is properly detected.")
-
-            # Take a single photo
-            while True:
-                # Capture a frame from the webcam
-                ret, frame = cap.read()
-
-                # Resize image for faster processing
-                small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-
-                # Detect faces in the frame
-                face_locations = face_recognition.face_locations(small_frame)
-
-                # If a face is detected, capture the photo
-                if len(face_locations) == 1:
-                    file_name = f"Images/{usn}.jpg"
-                    cv2.imwrite(file_name, frame)
-                    st.write(f"Saved photo as {file_name}")
-
-                    # Upload the image to Firebase Storage
-                    blob = bucket.blob("Images/" + f"{usn}.jpg")
-                    blob.upload_from_filename(file_name)
-                    st.write(f"Saved photo to Firebase Storage with URL {blob.public_url}")
-                    new_encoding = get_encoding(file_name)
-                    if new_encoding is not None:
-                        encodeKnown.append(new_encoding)
-                        studId.append(usn)
-
-                        # Update the pickle file
-                        with open("EncodeFile.p", "wb") as f:
-                            pickle.dump([encodeKnown, studId], f)
-                        st.success("Encodings updated successfully.")
-                    else:
-                        st.warning("Could not detect a face in the captured photo.")
-                    break
-
-                # Check if the user pressed 'q' to quit
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-
+            
+            # Capture a single frame
+            ret, frame = cap.read()
+            
+            if ret:
+                st.image(frame, caption="Captured photo", width=300)
+                
+                if st.button("Upload and Process Captured Photo"):
+                    process_and_store_image(frame)
+            else:
+                st.error("Failed to capture photo. Please try again.")
+            
             # Release the webcam
             cap.release()
-
-            # Destroy all windows
-            cv2.destroyAllWindows()
-            
-            return file_name
-
-        if st.button("Take Photo"):
-            captured_photo = capture_photo()
-            st.image(captured_photo, caption=f"Captured photo for USN {usn}", width=200)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def store_encodings():
