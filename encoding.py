@@ -7,11 +7,13 @@ import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
 from firebase_admin import storage
+from dotenv import load_dotenv
+load_dotenv() 
 
 cred = credentials.Certificate("serviceAccountKey.json")
 firebase_admin.initialize_app(cred, {
-    'databaseURL' : 'https://facialattendance-d2c63-default-rtdb.firebaseio.com/',
-    'storageBucket' : 'facialattendance-d2c63.appspot.com'
+    'databaseURL': os.getenv('FIREBASE_DATABASE_URL'),
+    'storageBucket': os.getenv('FIREBASE_STORAGE_BUCKET')
     })
 
 # Importing images to list
