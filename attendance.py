@@ -19,6 +19,7 @@ import pytz
 from PIL import Image
 from constants import DEPARTMENTS, SECTIONS, SEMESTERS, JOINING_YEARS
 import re
+from utils import load_known_encodings_and_ids
 
 st.set_page_config(
     page_title="Student Attendance System",
@@ -163,9 +164,6 @@ def store_student_details():
 
             st.success(f'Success! Data submitted for {name} with USN {student_id}')
             
-            # Display submitted data
-            st.markdown("### Submitted Data")
-            st.json(data)
 
     st.markdown('<div class="student-form">', unsafe_allow_html=True)
     st.markdown("#### Instructions:")
@@ -249,7 +247,7 @@ def manage_students():
 
 def store_image():
     st.markdown("<h2 style='text-align: center; color: #4a4a4a;'>Store Student Image</h2>", unsafe_allow_html=True)
-
+    encodeKnown, studId = load_known_encodings_and_ids()
     # Custom CSS
     st.markdown("""
     <style>
@@ -306,6 +304,19 @@ def store_image():
                 with open("EncodeFile.p", "wb") as f:
                     pickle.dump([encodeKnown, studId], f)
                 st.success("Encodings updated successfully.")
+
+                # Update the student's attendance in the database
+                student_ref = db.reference(f'Students/{usn}')
+                student_data = student_ref.get()
+                if student_data:
+                    current_attendance = student_data.get('total_attendance', 0)
+                    student_ref.update({
+                        'total_attendance': current_attendance + 1,
+                        'last_attendance': datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S")
+                    })
+                    st.success(f"Attendance marked for {usn}")
+                else:
+                    st.error(f"Student with USN {usn} not found in the database")
             else:
                 st.error("Could not detect a face in the image.")
 
@@ -358,25 +369,17 @@ def store_encodings():
         subprocess.run(["python", "encoding.py"])
         st.success('Success! Encodings stored.')  
 
-#  Old one changing it completely
-# def take_attendance():
-#     st.subheader("Take Attendance")
-#     if st.button("Take Attendance"):
-#         subprocess.run(["python", "main.py"])
-#     # Add code to take attendance using saved images
-#         st.success('Success! Attendance marked')
-
-# New one with enhanced options
 import dlib
 def _css_to_rect(css):
     return dlib.rectangle(css.left(), css.top(), css.right(), css.bottom())
 
 def take_attendance():
     st.subheader("Take Attendance")
-    semester = st.selectbox("Select Semester", options=[1, 2, 3, 4, 5, 6, 7, 8])
-    section = st.selectbox("Select Section", options=["A", "B", "C", "D"])
-    department = st.selectbox("Select department", options = ["CSE", "ISE", "ECE", "EEE", "AI&ML", "DS", "Mech", "Civil"])
+    semester = st.selectbox("Select Semester", options=SEMESTERS)
+    section = st.selectbox("Select Section", options=SECTIONS)
+    department = st.selectbox("Select Department", options=DEPARTMENTS)
     option = st.radio("Select Option", ("Live Video", "Upload Image"))
+    
     if option == "Live Video":
         if st.button("Take Attendance"):
             subprocess.run(["python", "main.py"])
@@ -390,12 +393,9 @@ def take_attendance():
 
             # Resize image for faster processing
             img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
-            
-
 
             # Detect faces in the image
-            face_locations = face_recognition.face_locations(img) # model="cnn"
-
+            face_locations = face_recognition.face_locations(img)
             face_encodings = face_recognition.face_encodings(img, face_locations)
 
             # Load known encodings and student IDs
@@ -417,17 +417,22 @@ def take_attendance():
                     id = studId[min_distance_index]
                     studentInfo = db.reference(f'Students/{id}').get()
                     if studentInfo is not None:
-                        datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=local_tz)
-                        secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
+                        if (str(studentInfo['semester']) == str(semester) and 
+                            studentInfo['section'] == section and 
+                            studentInfo['department'] == department):
+                            datetimeObject = datetime.datetime.strptime(studentInfo['last_attendance'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=local_tz)
+                            secondsElapsed = (datetime.datetime.now(local_tz) - datetimeObject).total_seconds()
 
-                        if secondsElapsed > 30:
-                            ref = db.reference(f'Students/{id}')
-                            studentInfo['total_attendance'] += 1
-                            ref.child('total_attendance').set(studentInfo['total_attendance'])
-                            ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
-                            marked_students += 1
+                            if secondsElapsed > 86400:  # 24 hours in seconds
+                                ref = db.reference(f'Students/{id}')
+                                studentInfo['total_attendance'] += 1
+                                ref.child('total_attendance').set(studentInfo['total_attendance'])
+                                ref.child('last_attendance').set(datetime.datetime.now(local_tz).strftime("%Y-%m-%d %H:%M:%S"))
+                                marked_students += 1
+                            else:
+                                st.warning(f"{studentInfo['name']}'s attendance was already marked within the last 24 hours.")
                         else:
-                            st.warning(f"{studentInfo['name']}'s attendance was already marked within the last 30 seconds.")
+                            st.warning(f"{studentInfo['name']} is not in the selected semester, section, or department.")
                     else:
                         st.warning(f"No student found with ID {id}.")
 
@@ -435,6 +440,7 @@ def take_attendance():
                 st.warning("No matching faces found in the uploaded image.")
             else:
                 st.success(f"Attendance marked for {marked_students} students.")
+
     st.subheader("Manual Attendance")
     st.write("Mark attendance for students who were not detected:")
 
@@ -449,7 +455,7 @@ def take_attendance():
         attendance_ref = db.reference('Students')
         attendance_data = attendance_ref.get()
         attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
-        attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department'] == department)]
+        attendance_df = attendance_df[(attendance_df['semester'].astype(str) == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department'] == department)]
 
         # Get the last attendance date and time from the "last_attendance" column
         last_attendance = attendance_df["last_attendance"]
@@ -486,22 +492,19 @@ def take_attendance():
             st.success("All students are marked present today.")
 
 
- 
 def check_attendance():
     st.subheader("Check Attendance")
-    # Get the attendance data from the "Students" node in the Firebase database
-    semester = st.selectbox("Select Semester", options=[1, 2, 3, 4, 5, 6, 7, 8])
-    section = st.selectbox("Select Section", options=["A", "B", "C", "D"])
-    department = st.selectbox("Select department", options = ["CSE", "ISE", "ECE", "EEE", "AI&ML", "DS", "Mech", "Civil"])
+    semester = st.selectbox("Select Semester", options=SEMESTERS)
+    section = st.selectbox("Select Section", options=SECTIONS)
+    department = st.selectbox("Select department", options=DEPARTMENTS)
 
     attendance_ref = db.reference('Students')
     attendance_data = attendance_ref.get()
 
     # Create a pandas dataframe from the attendance data
-    # attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
     attendance_df = pd.DataFrame.from_dict(attendance_data, orient='index')
-    attendance_df = attendance_df[(attendance_df['semester'] == str(semester)) & (attendance_df['section'] == section) & (attendance_df['department']==department)]
-
+    attendance_df['semester'] = attendance_df['semester'].astype(int)
+    attendance_df = attendance_df[(attendance_df['semester'] == semester) & (attendance_df['section'] == section) & (attendance_df['department']==department)]
 
     # Get the last attendance date and time from the "last_attendance" column
     last_attendance = attendance_df["last_attendance"]
@@ -509,7 +512,7 @@ def check_attendance():
 
     # Check if the last attendance date matches today's date
     today = datetime.datetime.now(local_tz).strftime("%Y-%m-%d")
-    for i, date_time in last_attendance.items():
+    for date_time in last_attendance:
         date = date_time.split(" ")[0]
         if date == today:
             present_today += 1
@@ -521,15 +524,13 @@ def check_attendance():
     if present_today == 0:
         st.warning("No students are present today.")
     else:
-        # st.success(f"{present_today} students are present today!")
         st.success(f"{present_today} students are present in section {section} today!")
 
     # Create a button to download the CSV file
-    csv = attendance_df.to_csv(index=False)
+    csv = attendance_df.to_csv(index=True)
     b64 = base64.b64encode(csv.encode()).decode()
     href = f'<a href="data:file/csv;base64,{b64}" download="attendance.csv">Download CSV file</a>'
-    # st.markdown(href, unsafe_allow_html=True)
-    st.download_button(label="Download CSV file", data=csv, file_name=f"attendance_{today}.csv", mime="text/csv")
+    st.markdown(href, unsafe_allow_html=True)
 
 
 if __name__ == '__main__':
